@@ -67,7 +67,19 @@ Open `index.html` in your browser to start using the application.
 
 - Adjust your sleep hours and record meals.
 - Watch your "Twin State" update based on interactions.
+
+
+
 - EEG data updates live every second, charted on a line graph.
+  
+## SCREENSHOTS AND SCREEN RECORDING:
+
+<img width="753" alt="Screenshot 2025-05-18 at 1 00 14 AM" src="https://github.com/user-attachments/assets/51f67db9-6472-4269-a4fc-0f9f2ff47ed9" />
+<img width="753" alt="Screenshot 2025-05-18 at 1 00 20 AM" src="https://github.com/user-attachments/assets/8386416e-3297-4484-a860-866ed3753956" />
+
+
+
+
 
 ## 📌 Future Improvements
 
