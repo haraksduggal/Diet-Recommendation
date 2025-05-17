@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Diet Recommendor</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Times+New+Roman:wght@400;700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="style.css" />
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Diet Recommendor</h1>
+
+            <div id="twin-state" class="card-like">
+                <h2>Twin State</h2>
+                <p>Mood: <span id="mood"></span></p>
+                <p>Energy: <span id="energy"></span></p>
+            </div>
+
+            <div id="user-input" class="card-like">
+                <h2>User Input</h2>
+                <label for="meal-input">Record Meal:</label>
+                <input type="text" id="meal-input" placeholder="Enter meal" />
+                <button onclick="recordMeal()">Record Meal</button>
+                <div id="meal-message"></div>
+
+                <div id="recorded-meals" class="subsection">
+                    <h3>Recent Meals</h3>
+                    <ul id="meal-list"></ul>
+                </div>
+
+                <label for="sleep-input">Adjust Sleep (hours):</label>
+                <input
+                    type="number"
+                    id="sleep-input"
+                    placeholder="Enter hours"
+                />
+                <button onclick="adjustSleep()">Adjust Sleep</button>
+                <div id="sleep-message"></div>
+
+                <div id="current-sleep-display" class="subsection">
+                    <h3>Current Sleep</h3>
+                    <p>
+                        You adjusted your sleep to:
+                        <span id="current-sleep"></span> hours.
+                    </p>
+                </div>
+            </div>
+
+            <div id="suggestions" class="card-like">
+                <h2>Suggestions</h2>
+                <p>Suggested Meals: <span id="meals"></span></p>
+            </div>
+
+            <div id="eeg-graph" class="card-like">
+                <h2>EEG Data</h2>
+                <canvas id="eegChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <script>
+            let eegChartInstance;
+
+            async function fetchInitialData() {
+                try {
+                    const response = await fetch(
+                        "http://127.0.0.1:5000/initial_data",
+                    );
+                    const data = await response.json();
+                    console.log("Initial data fetched:", data);
+                    updateTwinState(data.state.mood, data.state.energy);
+                    updateSuggestions(data.suggested_meals);
+                } catch (error) {
+                    console.error("Error fetching initial data:", error);
+                }
+            }
+
+            async function fetchAndUpdateTwinState() {
+                try {
+                    const response = await fetch(
+                        "http://127.0.0.1:5000/twin_state",
+                    );
+                    const data = await response.json();
+                    if (data && data.state) {
+                        document.getElementById("mood").textContent =
+                            data.state.mood;
+                        document.getElementById("energy").textContent =
+                            data.state.energy;
+                    }
+                } catch (error) {
+                    console.error("Error fetching twin state:", error);
+                }
+            }
+
+            async function fetchAndUpdateEEGData() {
+                try {
+                    const response = await fetch(
+                        "http://127.0.0.1:5000/eeg_data",
+                    );
+                    const data = await response.json();
+                    if (
+                        data &&
+                        data.eeg &&
+                        data.eeg.Alpha !== undefined &&
+                        data.eeg.Beta !== undefined
+                    ) {
+                        const alphaValue = data.eeg.Alpha;
+                        const betaValue = data.eeg.Beta;
+                        const timestamp = new Date().toLocaleTimeString();
+                        const eegCtx = document
+                            .getElementById("eegChart")
+                            .getContext("2d");
+
+                        if (eegChartInstance) {
+                            eegChartInstance.data.labels.push(timestamp);
+                            eegChartInstance.data.datasets[0].data.push(
+                                alphaValue,
+                            );
+                            eegChartInstance.data.datasets[1].data.push(
+                                betaValue,
+                            );
+                            eegChartInstance.update();
+
+                            const maxDataPoints = 10;
+                            if (
+                                eegChartInstance.data.labels.length >
+                                maxDataPoints
+                            ) {
+                                eegChartInstance.data.labels.shift();
+                                eegChartInstance.data.datasets[0].data.shift();
+                                eegChartInstance.data.datasets[1].data.shift();
+                            }
+                        } else {
+                            eegChartInstance = new Chart(eegCtx, {
+                                type: "line",
+                                data: {
+                                    labels: [timestamp],
+                                    datasets: [
+                                        {
+                                            label: "Alpha Wave",
+                                            data: [alphaValue],
+                                            borderColor:
+                                                "rgba(75, 192, 192, 1)",
+                                            borderWidth: 1,
+                                            fill: false,
+                                        },
+                                        {
+                                            label: "Beta Wave",
+                                            data: [betaValue],
+                                            borderColor:
+                                                "rgba(255, 99, 132, 1)",
+                                            borderWidth: 1,
+                                            fill: false,
+                                        },
+                                    ],
+                                },
+                                options: {
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                        },
+                                    },
+                                    animation: false,
+                                },
+                            });
+                        }
+                        console.log("EEG Data received:", data);
+                    } else {
+                        console.warn(
+                            "Alpha or Beta wave data not found in the response.",
+                        );
+                    }
+                } catch (error) {
+                    console.error("Error fetching EEG data:", error);
+                }
+            }
+
+            function recordMeal() {
+                const meal = document.getElementById("meal-input").value;
+                const messageDiv = document.getElementById("meal-message");
+                const mealList = document.getElementById("meal-list");
+                document.getElementById("meal-input").value = ""; // Clear the input
+
+                fetch("http://127.0.0.1:5000/record_meal", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ meal: meal }),
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        console.log("Meal recorded:", data);
+                        messageDiv.textContent =
+                            data.message || "Meal recorded!";
+                        messageDiv.style.color = "green";
+                        messageDiv.classList.add("show-message");
+                        setTimeout(() => {
+                            messageDiv.textContent = "";
+                            messageDiv.classList.remove("show-message");
+                        }, 3000);
+
+                        // Update the list of recorded meals (if the server sends back the updated list)
+                        if (data.meals && Array.isArray(data.meals)) {
+                            mealList.innerHTML = ""; // Clear the current list
+                            data.meals.forEach((recordedMeal) => {
+                                const listItem = document.createElement("li");
+                                listItem.textContent = recordedMeal;
+                                mealList.appendChild(listItem);
+                            });
+                        } else {
+                            // If the server doesn't send the list, just add the new meal locally
+                            const listItem = document.createElement("li");
+                            listItem.textContent = meal;
+                            mealList.appendChild(listItem);
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Error recording meal:", error);
+                        messageDiv.textContent = "Error recording meal.";
+                        messageDiv.style.color = "red";
+                        messageDiv.classList.add("show-message");
+                        setTimeout(() => {
+                            messageDiv.textContent = "";
+                            messageDiv.classList.remove("show-message");
+                        }, 3000);
+                    });
+            }
+
+            function adjustSleep() {
+                const sleepHours = document.getElementById("sleep-input").value;
+                const messageDiv = document.getElementById("sleep-message");
+                const currentSleepSpan =
+                    document.getElementById("current-sleep");
+                document.getElementById("sleep-input").value = ""; // Clear the input
+
+                fetch("http://127.0.0.1:5000/adjust_sleep", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ hours: sleepHours }),
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        console.log("Sleep adjusted:", data);
+                        messageDiv.textContent =
+                            data.message || "Sleep adjusted!";
+                        messageDiv.style.color = "green";
+                        messageDiv.classList.add("show-message");
+                        setTimeout(() => {
+                            messageDiv.textContent = "";
+                            messageDiv.classList.remove("show-message");
+                        }, 3000);
+
+                        // Update the displayed sleep duration
+                        if (data.hours !== undefined) {
+                            currentSleepSpan.textContent = data.hours;
+                        } else if (data.sleep !== undefined) {
+                            currentSleepSpan.textContent = data.sleep; // Try a different key if 'hours' is not present
+                        } else {
+                            currentSleepSpan.textContent = sleepHours; // Fallback to the input value
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Error adjusting sleep:", error);
+                        messageDiv.textContent = "Error adjusting sleep.";
+                        messageDiv.style.color = "red";
+                        messageDiv.classList.add("show-message");
+                        setTimeout(() => {
+                            messageDiv.textContent = "";
+                            messageDiv.classList.remove("show-message");
+                        }, 3000);
+                    });
+            }
+
+            function updateTwinState(mood, energy) {
+                document.getElementById("mood").textContent = mood;
+                document.getElementById("energy").textContent = energy;
+            }
+
+            function updateSuggestions(meals) {
+                const mealsContainer = document.getElementById("meals");
+                mealsContainer.innerHTML = ""; // Clear any existing content
+
+                if (meals && typeof meals === "object") {
+                    if (meals.breakfast) {
+                        const breakfastPara = document.createElement("p");
+                        breakfastPara.textContent = `Breakfast: ${meals.breakfast}`;
+                        mealsContainer.appendChild(breakfastPara);
+                    }
+                    if (meals.lunch) {
+                        const lunchPara = document.createElement("p");
+                        lunchPara.textContent = `Lunch: ${meals.lunch}`;
+                        mealsContainer.appendChild(lunchPara);
+                    }
+                    if (meals.dinner) {
+                        const dinnerPara = document.createElement("p");
+                        dinnerPara.textContent = `Dinner: ${meals.dinner}`;
+                        mealsContainer.appendChild(dinnerPara);
+                    }
+                    if (meals.snacks && Array.isArray(meals.snacks)) {
+                        const snacksPara = document.createElement("p");
+                        snacksPara.textContent = `Snacks: ${meals.snacks.join(", ")}`;
+                        mealsContainer.appendChild(snacksPara);
+                    }
+                } else if (typeof meals === "string") {
+                    mealsContainer.textContent = meals; // Fallback for a simple string
+                }
+            }
+
+            // Fetch initial data when the page loads
+            fetchInitialData();
+
+            // Periodically update Twin State data (every 3 seconds)
+            setInterval(fetchAndUpdateTwinState, 3000);
+
+            // Periodically update EEG data (every 1 second)
+            setInterval(fetchAndUpdateEEGData, 1000);
+        </script>
+    </body>
+</html>
